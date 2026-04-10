@@ -1,0 +1,17 @@
+# @package _global_
+
+name: debug
+training:
+  epochs: 2
+  batch_size: 64
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+fewshot:
+  enabled: true
+  shots: 4
+  split_seed: ${seed}
+evaluation:
+  nfe: 1
+task:
+  cache_tag: debug
+  debug_subset: 1024
