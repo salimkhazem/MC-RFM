@@ -1,0 +1,6 @@
+name: resnet50
+timm_name: resnet50
+pretrained: true
+feature_dim: 2048
+pool: avg
+
