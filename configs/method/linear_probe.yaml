@@ -1,0 +1,6 @@
+name: linear_probe
+trainable: head
+optimizer: adamw
+loss: cross_entropy
+hidden_dim: 0
+
