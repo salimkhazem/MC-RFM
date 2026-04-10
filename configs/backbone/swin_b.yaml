@@ -1,0 +1,6 @@
+name: swin_b
+timm_name: swin_base_patch4_window7_224
+pretrained: true
+feature_dim: 1024
+pool: avg
+
