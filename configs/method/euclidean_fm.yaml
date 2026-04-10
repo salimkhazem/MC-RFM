@@ -1,0 +1,13 @@
+name: euclidean_fm
+vector_field:
+  hidden_dim: 512
+  num_layers: 3
+  coupled: true
+flow:
+  nfe_train: 1
+  nfe_eval: 3
+  solver: euler
+loss:
+  mse_weight: 1.0
+  velocity_reg: 1.0e-4
+
