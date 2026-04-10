@@ -1,0 +1,11 @@
+name: cifar100
+root: ${oc.env:PDHFM_DATA_ROOT,./data}
+image_size: 224
+num_classes: 100
+train_split: train
+val_split: test
+test_split: test
+download: true
+mean: [0.5071, 0.4867, 0.4408]
+std: [0.2675, 0.2565, 0.2761]
+

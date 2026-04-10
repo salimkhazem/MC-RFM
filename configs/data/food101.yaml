@@ -1,0 +1,11 @@
+name: food101
+root: ${oc.env:PDHFM_DATA_ROOT,./data}
+image_size: 224
+num_classes: 101
+train_split: train
+val_split: test
+test_split: test
+download: true
+mean: [0.485, 0.456, 0.406]
+std: [0.229, 0.224, 0.225]
+
