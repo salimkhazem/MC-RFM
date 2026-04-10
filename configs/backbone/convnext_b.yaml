@@ -1,0 +1,6 @@
+name: convnext_b
+timm_name: convnext_base
+pretrained: true
+feature_dim: 1024
+pool: avg
+
