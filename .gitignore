@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+
+# Artifacts
+logs/*
+!logs/.gitkeep
+results/*
+!results/.gitkeep
+outputs/
+results_mc_rfm/
+wandb/
+*.pt
+*.pth
+
+# IDE
+.idea/
+.vscode/
