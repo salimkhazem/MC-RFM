@@ -1,0 +1,6 @@
+model:
+  backbone: convnext_tiny
+  pretrained: true
+  feature_dim: 768
+  bottleneck_dim: 256
+
