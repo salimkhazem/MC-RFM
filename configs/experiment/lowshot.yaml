@@ -1,0 +1,14 @@
+# @package _global_
+
+name: lowshot
+training:
+  epochs: 30
+  batch_size: 256
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+fewshot:
+  enabled: true
+  shots: 16
+  split_seed: ${seed}
+evaluation:
+  nfe: 3
