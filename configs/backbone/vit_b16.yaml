@@ -1,0 +1,6 @@
+name: vit_b16
+timm_name: vit_base_patch16_224
+pretrained: true
+feature_dim: 768
+pool: cls
+
