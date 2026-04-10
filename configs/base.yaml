@@ -1,0 +1,79 @@
+project:
+  name: mc_rfm
+  output_root: results_mc_rfm
+  run_name: ""
+
+seed: 42
+device:
+  amp: true
+  amp_dtype: bfloat16
+  num_workers: 8
+  pin_memory: true
+  deterministic: true
+
+dataset:
+  name: cifar100
+  root: ./data
+  image_size: 224
+  train_split: train
+  val_split: test
+  test_split: test
+  num_classes: 100
+  download: true
+  mean: [0.5071, 0.4867, 0.4408]
+  std: [0.2675, 0.2565, 0.2761]
+
+model:
+  backbone: vit_base_patch16_224
+  pretrained: true
+  feature_dim: 768
+  bottleneck_dim: 256
+  dh: 128
+  de: 128
+  hidden_dim: 512
+  layers: 3
+  learnable_curvature: false
+  curvature: 0.5
+  curvature_min: 1.0e-3
+  geometry_mode: mixed
+  decoupled_heads: true
+
+fewshot:
+  shots: 4
+  split_seed: 42
+  split_dir: results_mc_rfm/fewshot_indices
+
+cache:
+  lmdb_dir: results_mc_rfm/lmdb
+  map_size_gb: 16
+  force_rebuild: false
+  max_samples: 0
+
+training:
+  epochs: 50
+  batch_size: 64
+  effective_batch_size: 256
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  warmup_epochs: 5
+  lambda_euclidean: 1.0
+  epsilon_t: 1.0e-3
+  log_interval: 20
+
+ode:
+  solver: euler
+  nfe: 3
+
+eval:
+  nfe: 3
+  batch_size: 256
+
+logging:
+  summary_csv: results_mc_rfm/summary.csv
+  json_indent: 2
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
