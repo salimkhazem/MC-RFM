@@ -1,0 +1,22 @@
+include:
+  - configs/base.yaml
+  - configs/dataset/cifar100.yaml
+  - configs/model/vit_b16.yaml
+
+project:
+  run_name: mcfm_default
+
+fewshot:
+  shots: 4
+
+model:
+  geometry_mode: mixed
+  dh: 128
+  de: 128
+  decoupled_heads: true
+  learnable_curvature: false
+  curvature: 0.5
+
+ode:
+  nfe: 3
+
