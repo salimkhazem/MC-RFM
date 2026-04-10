@@ -1,0 +1,18 @@
+include:
+  - configs/base.yaml
+  - configs/dataset/cifar100.yaml
+  - configs/model/vit_b16.yaml
+
+project:
+  run_name: ablations
+
+ablation:
+  geometry_modes: ["euclidean", "hyperbolic", "mixed", "remove_hyper"]
+  nfe_values: [1, 3, 5]
+  signatures:
+    - [64, 192]
+    - [128, 128]
+    - [192, 64]
+  curvature_values: [0.1, 0.5, 1.0]
+  decoupled_heads: [true, false]
+
