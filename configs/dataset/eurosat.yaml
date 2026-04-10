@@ -1,0 +1,10 @@
+dataset:
+  name: eurosat
+  num_classes: 10
+  train_split: train
+  val_split: val
+  test_split: test
+  download: true
+  mean: [0.3444, 0.3809, 0.4082]
+  std: [0.2039, 0.1364, 0.1147]
+
