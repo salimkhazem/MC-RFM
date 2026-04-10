@@ -1,0 +1,27 @@
+name: pd_hfm
+projection:
+  feature_layernorm: true
+  feature_l2norm: true
+  feature_scale: 1.0
+  ball_eps: 1.0e-5
+geometry:
+  curvature: 0.5
+  loss_space: euclidean_tangent
+  use_riemannian_weight: false
+vector_field:
+  hidden_dim: 512
+  num_layers: 3
+  coupled: false
+  use_euclidean_orthogonal_proxy: true
+flow:
+  target_mode: class_prototype
+  path_mode: projected_linear
+  nfe_train: 1
+  nfe_eval: 3
+  solver: euler
+loss:
+  mse_weight: 1.0
+  boundary_penalty_weight: 1.0e-3
+  velocity_reg: 1.0e-4
+  angular_smoothness: 0.0
+
