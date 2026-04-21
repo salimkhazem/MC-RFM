@@ -16,10 +16,12 @@ dataset:
   root: ./data
   image_size: 224
   train_split: train
-  val_split: test
+  val_split: val
   test_split: test
   num_classes: 100
   download: true
+  internal_val_ratio: 0.1
+  internal_val_seed: 42
   mean: [0.5071, 0.4867, 0.4408]
   std: [0.2675, 0.2565, 0.2761]
 
@@ -37,6 +39,25 @@ model:
   curvature_min: 1.0e-3
   geometry_mode: mixed
   decoupled_heads: true
+  hyperbolic_scale_init: 0.08
+  hyperbolic_scale_min: 0.01
+  hyperbolic_scale_max: 0.35
+  euclidean_scale_init: 1.0
+  vector_field_h_input: logmap0
+  task_conditioning: true
+  task_context_dim: 128
+  task_context_hidden_dim: 128
+
+classifier:
+  mode: hybrid
+  prototype_shrinkage: 0.1
+  gamma_h_init: 0.25
+  gamma_e_init: 1.0
+  beta_init: 0.5
+  adaptive_branch_gate: true
+  branch_gate_init: 0.5
+  adaptive_beta: true
+  gate_hidden_dim: 128
 
 fewshot:
   shots: 4
@@ -58,7 +79,13 @@ training:
   grad_clip: 1.0
   warmup_epochs: 5
   lambda_euclidean: 1.0
+  lambda_cls: 0.5
+  label_smoothing: 0.1
   epsilon_t: 1.0e-3
+  hyperbolic_loss_weighting: none
+  riemannian_scale_clip: 10.0
+  hyper_loss_warmup_epochs: 5
+  hyper_loss_ramp_epochs: 10
   log_interval: 20
 
 ode:
