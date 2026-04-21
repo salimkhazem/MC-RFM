@@ -12,6 +12,8 @@ import numpy as np
 from torch.utils.data import Dataset, Subset
 from torchvision import datasets as tvd, transforms
 
+from src.data.fewshot_splits import load_or_create_internal_val_indices
+
 
 @dataclass
 class DatasetBundle:
@@ -179,6 +181,13 @@ def _make_single(cfg: dict[str, Any], split: str, tfm: transforms.Compose) -> Da
     if name == "flowers102":
         return tvd.Flowers102(root=root, split=split, transform=tfm, download=download)
     if name == "stanford_cars":
+        if download:
+            raise FileNotFoundError(
+                "Stanford Cars was not found in MC_RFM_DATA_ROOT or MC_RFM_SHARED_DATA_ROOTS, "
+                "and torchvision can no longer download it because the upstream URL is broken. "
+                "Place a local copy under one of the searched roots with a marker such as "
+                "'stanford-cars', 'stanford_cars', or 'car_data'."
+            )
         return tvd.StanfordCars(root=root, split=split, transform=tfm, download=download)
     if name == "food101":
         return tvd.Food101(root=root, split=split, transform=tfm, download=download)
@@ -204,9 +213,52 @@ def _make_single(cfg: dict[str, Any], split: str, tfm: transforms.Compose) -> Da
     raise ValueError(f"Unsupported dataset: {cfg['name']}")
 
 
-def build_dataset_bundle(cfg: dict[str, Any]) -> DatasetBundle:
+def _uses_internal_val_split(name: str) -> bool:
+    return name in {"cifar10", "cifar100", "food101", "stanford_cars", "pets", "tinyimagenet"}
+
+
+def _internal_val_source_split(name: str, cfg: dict[str, Any]) -> str:
+    if name == "pets":
+        return str(cfg.get("train_split", "trainval"))
+    return "train"
+
+
+def _internal_val_split_dir(split_dir: str | Path | None) -> str | Path:
+    return split_dir or "results_mc_rfm/fewshot_indices"
+
+
+def _build_internal_val_bundle(
+    cfg: dict[str, Any],
+    train_t: transforms.Compose,
+    eval_t: transforms.Compose,
+    split_dir: str | Path | None,
+) -> DatasetBundle:
+    name = cfg["name"].lower()
+    source_split = _internal_val_source_split(name, cfg)
+    train_base = _make_single(cfg, source_split, train_t)
+    eval_base = _make_single(cfg, source_split, eval_t)
+    train_idx, val_idx = load_or_create_internal_val_indices(
+        split_dir=_internal_val_split_dir(split_dir),
+        dataset=name,
+        source_split=source_split,
+        labels=extract_targets(eval_base),
+        val_ratio=float(cfg.get("internal_val_ratio", 0.1)),
+        seed=int(cfg.get("internal_val_seed", 42)),
+    )
+    test_ds = _make_single(cfg, cfg.get("test_split", "test"), eval_t)
+    return DatasetBundle(
+        train=Subset(train_base, train_idx),
+        val=Subset(eval_base, val_idx),
+        test=test_ds,
+        num_classes=int(cfg["num_classes"]),
+    )
+
+
+def build_dataset_bundle(cfg: dict[str, Any], split_dir: str | Path | None = None) -> DatasetBundle:
     train_t = build_transforms(cfg["image_size"], cfg["mean"], cfg["std"], train=True)
     eval_t = build_transforms(cfg["image_size"], cfg["mean"], cfg["std"], train=False)
+    if _uses_internal_val_split(cfg["name"].lower()):
+        return _build_internal_val_bundle(cfg, train_t, eval_t, split_dir=split_dir)
     train_ds = _make_single(cfg, cfg.get("train_split", "train"), train_t)
     val_ds = _make_single(cfg, cfg.get("val_split", "val"), eval_t)
     test_ds = _make_single(cfg, cfg.get("test_split", "test"), eval_t)
