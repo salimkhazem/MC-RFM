@@ -24,6 +24,12 @@ export MC_RFM_DATA_ROOT=/path/to/datasets
 
 Supported now: `cifar10`, `cifar100`, `dtd`, `pets`, `aircraft`, `flowers102`, `stanford_cars`, `food101`, `eurosat`, `tinyimagenet`.
 
+For datasets without an official validation split, MC-RFM now creates a deterministic cached internal validation split from the official training data:
+
+- `cifar10`, `cifar100`, `food101`, `stanford_cars`: `train -> train/val`
+- `pets`: `trainval -> train/val`
+- `tinyimagenet`: `train -> train/val`, official organized `val/` is kept as test only
+
 If a dataset already exists in one of your shared project roots, MC-RFM reuses it directly and skips download. By default it checks if the datasets are available in local .
 You can add more search roots with:
 
@@ -32,6 +38,10 @@ export MC_RFM_SHARED_DATA_ROOTS=/path/one:/path/two
 ```
 
 For `tinyimagenet`, place an extracted `tiny-imagenet-200/` directory under one of the searched roots. The loader will organize the official validation images into an `ImageFolder`-compatible structure on first use.
+
+## Current Result Status
+
+Artifacts currently under `results_mc_rfm/tables.*` and `results_mc_rfm/figs/*` should be treated as pilot-only until the verification pass succeeds. The verification runner writes a `results_mc_rfm/PILOT_ONLY.md` marker and a timestamped report under `results_mc_rfm/verification/`.
 
 ## Cache Frozen Features (LMDB)
 
@@ -83,6 +93,7 @@ make test
 make cache CONFIG=configs/experiments/mcfm_default.yaml
 make train CONFIG=configs/experiments/mcfm_default.yaml
 make ablate ABLATE_CONFIG=configs/experiments/ablations.yaml
+make verify CONFIG=configs/experiments/mcfm_default.yaml
 make tables
 make figs
 make reproduce
