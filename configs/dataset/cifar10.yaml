@@ -2,7 +2,7 @@ dataset:
   name: cifar10
   num_classes: 10
   train_split: train
-  val_split: test
+  val_split: val
   test_split: test
   download: true
   mean: [0.4914, 0.4822, 0.4465]

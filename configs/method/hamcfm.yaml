@@ -1,0 +1,123 @@
+# HAM-CFM (Hierarchical Adaptive Mixed-Curvature Flow Matching) Configuration
+# Breakthrough method for NeurIPS 2026 acceptance
+
+method:
+  name: "hamcfm"
+  class_name: "HAMCFMMethod"
+  
+  # Core architecture parameters
+  bottleneck_dim: 256
+  dh: 128  # Hyperbolic dimensions
+  hidden_dim: 1024
+  layers: 4
+  
+  # Geometry parameters
+  curvature: 1.0
+  learnable_curvature: true
+  hierarchy_dim: 512
+  num_geometries: 4  # hyperbolic, euclidean, spherical, mixed
+  
+  # Loss weights (progressive during training)
+  flow_matching_weight: 1.0
+  classification_weight: 0.1
+  hierarchy_reg_weight: 0.05
+  adaptive_loss_weight: 0.02
+  
+  # Training dynamics
+  warmup_epochs: 10
+  geometry_exploration_epochs: 20
+  
+  # Prototype parameters
+  prototype_shrinkage: 0.1
+  
+  # Adaptive geometry router
+  geometry_router:
+    temperature_init: 1.0
+    confidence_threshold: 0.5
+    
+  # Hierarchical encoder
+  hierarchy_encoder:
+    use_semantic_distances: true
+    tree_attention_heads: 8
+    tree_layers: 2
+    
+  # Vector field network
+  vector_field:
+    time_dim: 64
+    use_layer_norm: true
+    activation: "silu"
+    dropout: 0.1
+    
+  # ODE solver
+  solver:
+    method: "euler"
+    nfe: 3  # Number of function evaluations
+    rtol: 1e-5
+    atol: 1e-6
+    
+# Training configuration
+training:
+  optimizer: "adamw"
+  learning_rate: 1e-4
+  weight_decay: 1e-2
+  scheduler: "cosine"
+  
+  # Progressive training schedule
+  phase_1_epochs: 10   # Warmup with classification focus
+  phase_2_epochs: 20   # Geometry exploration 
+  phase_3_epochs: 50   # Full HAM-CFM training
+  
+  # Gradient management
+  grad_clip_norm: 1.0
+  mixed_precision: true
+  
+# Evaluation configuration  
+evaluation:
+  modes: ["classify", "transport", "geometry_analysis"]
+  save_geometry_stats: true
+  save_hierarchy_viz: true
+  
+# Ablation study configurations
+ablations:
+  - name: "no_adaptive_geometry"
+    geometry_router: null
+    fixed_geometry_weights: [0.5, 0.5, 0.0, 0.0]  # 50% hyp, 50% euc
+    
+  - name: "no_hierarchical_conditioning" 
+    hierarchy_encoder: null
+    hierarchy_reg_weight: 0.0
+    
+  - name: "no_task_conditioning"
+    use_task_conditioning: false
+    
+  - name: "euclidean_only"
+    fixed_geometry_weights: [0.0, 1.0, 0.0, 0.0]  # 100% euclidean
+    
+  - name: "hyperbolic_only"
+    fixed_geometry_weights: [1.0, 0.0, 0.0, 0.0]  # 100% hyperbolic
+    
+# Computational optimizations
+optimization:
+  cache_prototypes: true
+  use_checkpointing: true
+  compile_model: true  # PyTorch 2.0 compilation
+  
+# Logging and visualization
+logging:
+  log_geometry_weights: true
+  log_confidence: true
+  log_hierarchy_distances: true
+  save_flow_trajectories: true
+  
+  # Wandb configuration for detailed tracking
+  wandb:
+    project: "hamcfm-neurips2026"
+    tags: ["hamcfm", "adaptive-geometry", "hierarchical", "flow-matching"]
+    log_freq: 10
+    
+# Hardware-specific settings
+hardware:
+  use_mixed_precision: true
+  gradient_accumulation_steps: 1
+  dataloader_num_workers: 4
+  pin_memory: true

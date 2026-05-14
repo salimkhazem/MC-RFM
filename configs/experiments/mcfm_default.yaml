@@ -17,6 +17,8 @@ model:
   learnable_curvature: false
   curvature: 0.5
 
+classifier:
+  mode: hybrid
+
 ode:
   nfe: 3
-
