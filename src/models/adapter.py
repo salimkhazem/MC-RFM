@@ -5,7 +5,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from src.geometry.product_manifold import product_project, project_product
+from src.geometry.poincare import log_map_0
+from src.geometry.product_manifold import project_product
 from src.models.bottleneck import BottleneckProjector
 from src.models.mcfm_vector_field import VectorFieldNet
 from src.ode.solver import solve_ode
@@ -40,9 +41,25 @@ class MCRFMAdapter(nn.Module):
         learnable_curvature: bool,
         curvature_min: float,
         decoupled_heads: bool,
+        geometry_mode: str,
+        hyperbolic_scale_init: float,
+        hyperbolic_scale_min: float,
+        hyperbolic_scale_max: float,
+        euclidean_scale_init: float,
+        vector_field_h_input: str,
     ):
         super().__init__()
-        self.projector = BottleneckProjector(in_dim=in_dim, bottleneck_dim=bottleneck_dim, dh=dh)
+        self.geometry_mode = str(geometry_mode).lower()
+        self.vector_field_h_input = str(vector_field_h_input).lower()
+        self.projector = BottleneckProjector(
+            in_dim=in_dim,
+            bottleneck_dim=bottleneck_dim,
+            dh=dh,
+            hyperbolic_scale_init=hyperbolic_scale_init,
+            hyperbolic_scale_min=hyperbolic_scale_min,
+            hyperbolic_scale_max=hyperbolic_scale_max,
+            euclidean_scale_init=euclidean_scale_init,
+        )
         self.de = bottleneck_dim - dh
         self.curvature_param = CurvatureParameter(
             initial_c=float(curvature),
@@ -60,16 +77,30 @@ class MCRFMAdapter(nn.Module):
     def curvature(self) -> float:
         return float(self.curvature_param.value().detach().item())
 
+    def hyperbolic_scale(self) -> float:
+        return float(self.projector.hyperbolic_scale().detach().item())
+
+    def euclidean_scale(self) -> float:
+        return float(self.projector.euclidean_scale().detach().item())
+
     def encode(self, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         u, uh, ue = self.projector(features)
         c = float(self.curvature_param.value().detach().item())
         zh, ze = project_product(u, dh=self.projector.dh, c=c)
         return zh, ze, u
 
-    def field(self, zh: torch.Tensor, ze: torch.Tensor, t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.vf(zh, ze, t)
+    def chart_h(self, zh: torch.Tensor) -> torch.Tensor:
+        return log_map_0(zh, c=self.curvature())
 
-    @torch.no_grad()
+    def field(self, zh: torch.Tensor, ze: torch.Tensor, t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        input_h = self.chart_h(zh) if self.vector_field_h_input == "logmap0" else zh
+        vh, ve = self.vf(input_h, ze, t)
+        if self.geometry_mode in {"euclidean", "remove_hyper"}:
+            vh = torch.zeros_like(vh)
+        if self.geometry_mode == "hyperbolic":
+            ve = torch.zeros_like(ve)
+        return vh, ve
+
     def transport(self, zh0: torch.Tensor, ze0: torch.Tensor, solver: str, nfe: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         c = float(self.curvature_param.value().detach().item())
         zh, ze, evals = solve_ode(
@@ -79,5 +110,6 @@ class MCRFMAdapter(nn.Module):
             solver=solver,
             nfe=nfe,
             curvature=c,
+            hyper_state_mode=self.vector_field_h_input,
         )
         return zh, ze, evals
