@@ -1,26 +1,48 @@
-# Python
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
-# Environments
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
 .venv/
 venv/
+env/
 
-# Artifacts
+# Local datasets and generated feature stores
+data/
+*.lmdb
+*.mdb
+
+# Experiment outputs and checkpoints
 logs/*
 !logs/.gitkeep
 results/*
 !results/.gitkeep
 outputs/
+multirun/
 results_mc_rfm/
 wandb/
+*.ckpt
 *.pt
 *.pth
 
-# IDE
+# Local scratch/config files
+.codex
+.tmp_configs
+*.log
+
+# IDE and OS files
 .idea/
 .vscode/
+.DS_Store
