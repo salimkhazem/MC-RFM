@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import json
 import subprocess
 from pathlib import Path
@@ -38,12 +39,18 @@ def append_summary_csv(path: str | Path, row: dict[str, Any]) -> None:
     path = Path(path)
     ensure_dir(path.parent)
     fieldnames = sorted(row.keys())
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if not exists:
-            writer.writeheader()
-        writer.writerow(row)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_f:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+        try:
+            exists = path.exists()
+            with path.open("a", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                if not exists:
+                    writer.writeheader()
+                writer.writerow(row)
+        finally:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
 
 
 def resolve_git_hash() -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import json
 import logging
 import os
@@ -50,31 +51,37 @@ def append_jsonl(path: str | Path, row: dict[str, Any]) -> None:
 def append_csv(path: str | Path, row: dict[str, Any]) -> None:
     path = Path(path)
     ensure_dir(path.parent)
-    if not path.exists():
-        with path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=sorted(row.keys()))
-            writer.writeheader()
-            writer.writerow(row)
-        return
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_f:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+        try:
+            if not path.exists():
+                with path.open("w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=sorted(row.keys()))
+                    writer.writeheader()
+                    writer.writerow(row)
+                return
 
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        existing_rows = list(reader)
-        existing_fields = reader.fieldnames or []
+            with path.open("r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                existing_rows = list(reader)
+                existing_fields = reader.fieldnames or []
 
-    new_fields = sorted(set(existing_fields) | set(row.keys()))
-    if new_fields == list(existing_fields):
-        with path.open("a", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=new_fields)
-            writer.writerow(row)
-        return
+            new_fields = sorted(set(existing_fields) | set(row.keys()))
+            if new_fields == list(existing_fields):
+                with path.open("a", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=new_fields)
+                    writer.writerow(row)
+                return
 
-    with path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=new_fields)
-        writer.writeheader()
-        for existing in existing_rows:
-            writer.writerow(existing)
-        writer.writerow(row)
+            with path.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=new_fields)
+                writer.writeheader()
+                for existing in existing_rows:
+                    writer.writerow(existing)
+                writer.writerow(row)
+        finally:
+            fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
 
 
 def make_run_name(cfg: dict[str, Any]) -> str:

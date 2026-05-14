@@ -183,6 +183,7 @@ def _evaluate(
     loader: DataLoader,
     proto_h: torch.Tensor,
     proto_e: torch.Tensor,
+    task_context: torch.Tensor | None,
     cfg: dict[str, Any],
     device: torch.device,
     num_classes: int,
@@ -200,6 +201,7 @@ def _evaluate(
             ze0,
             solver=str(cfg["ode"]["solver"]),
             nfe=int(cfg["eval"]["nfe"]),
+            task_context=task_context,
         )
         logits = classifier(
             zh,
@@ -208,6 +210,7 @@ def _evaluate(
             proto_e=proto_e,
             c=model.curvature(),
             geometry_mode=_geometry_mode(cfg),
+            task_context=task_context,
         )
         logits_all.append(logits)
         labels_all.append(labels)
@@ -279,6 +282,9 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         hyperbolic_scale_max=float(cfg["model"].get("hyperbolic_scale_max", 0.25)),
         euclidean_scale_init=float(cfg["model"].get("euclidean_scale_init", 1.0)),
         vector_field_h_input=str(cfg["model"].get("vector_field_h_input", "logmap0")),
+        task_conditioning=bool(cfg["model"].get("task_conditioning", False)),
+        task_context_dim=int(cfg["model"].get("task_context_dim", 128)),
+        task_context_hidden_dim=int(cfg["model"].get("task_context_hidden_dim", 128)),
     ).to(device)
     classifier = MCRFMClassifier(
         dh=int(cfg["model"]["dh"]),
@@ -292,6 +298,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         branch_gate_init=float(cfg.get("classifier", {}).get("branch_gate_init", 0.5)),
         adaptive_beta=bool(cfg.get("classifier", {}).get("adaptive_beta", False)),
         gate_hidden_dim=int(cfg.get("classifier", {}).get("gate_hidden_dim", 128)),
+        task_context_dim=int(cfg["model"].get("task_context_dim", 0)) if bool(cfg["model"].get("task_conditioning", False)) else 0,
     ).to(device)
     ce_loss = torch.nn.CrossEntropyLoss(label_smoothing=float(cfg["training"].get("label_smoothing", 0.0)))
 
@@ -349,6 +356,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
             "euclidean_mult_mean": 0.0,
             "branch_gate_mean": 0.0,
             "beta_effective_mean": 0.0,
+            "task_context_norm": 0.0,
         }
         min_boundary_margin = float("inf")
         epoch_hyper_weight = _hyper_weight(cfg, epoch)
@@ -357,6 +365,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         for batch_idx, (feats, labels, _) in enumerate(pbar):
             feats = feats.to(device, non_blocking=True)
             labels = labels.to(device)
+            task_context = model.encode_task_context(proto_h, proto_e)
             zh0, ze0, _ = model.encode(feats)
             zh1 = proto_h[labels]
             ze1 = proto_e[labels]
@@ -394,16 +403,18 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
                     zte,
                     c=model.curvature(),
                     geometry_mode=_geometry_mode(cfg),
+                    task_context=task_context,
                 )
                 branch_gate = classifier.branch_gates(
                     zth,
                     zte,
                     c=model.curvature(),
                     geometry_mode=_geometry_mode(cfg),
+                    task_context=task_context,
                 )
 
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=use_amp):
-                vh, ve = model.field(zth, zte, t)
+                vh, ve = model.field(zth, zte, t, task_context=task_context)
                 fm_loss = flow_matching_loss(
                     v_h=vh,
                     v_e=ve,
@@ -424,6 +435,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
                     ze0.float(),
                     solver=str(cfg["ode"]["solver"]),
                     nfe=int(cfg["ode"]["nfe"]),
+                    task_context=task_context,
                 )
                 logits = classifier(
                     zh_cls,
@@ -432,12 +444,14 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
                     proto_e=proto_e,
                     c=model.curvature(),
                     geometry_mode=_geometry_mode(cfg),
+                    task_context=task_context,
                 )
                 beta_values = classifier.beta_values(
                     zh_cls,
                     ze_cls,
                     c=model.curvature(),
                     geometry_mode=_geometry_mode(cfg),
+                    task_context=task_context,
                 )
                 cls_loss = ce_loss(logits, labels)
                 loss = fm_loss + float(cfg["training"].get("lambda_cls", 0.0)) * cls_loss
@@ -466,6 +480,8 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
                         diag_sums[key] += float(branch_gate.detach().mean().cpu().item())
                     elif key == "beta_effective_mean":
                         diag_sums[key] += float(beta_values.detach().mean().cpu().item())
+                    elif key == "task_context_norm":
+                        diag_sums[key] += float(task_context.detach().norm().cpu().item()) if task_context is not None else 0.0
                     else:
                         diag_sums[key] += float(batch_diag[key].detach().cpu().item())
                 min_boundary_margin = min(
@@ -515,12 +531,14 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
             num_classes=num_classes,
             shrinkage=float(cfg.get("classifier", {}).get("prototype_shrinkage", 0.0)),
         )
+        task_context_val = model.encode_task_context(proto_h_val, proto_e_val)
         val_metrics = _evaluate(
             model,
             classifier,
             loaders.val,
             proto_h_val,
             proto_e_val,
+            task_context_val,
             cfg,
             device=device,
             num_classes=num_classes,
@@ -556,6 +574,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
             "hyper_mult_mean": diag_sums["hyper_mult_mean"] / num_batches,
             "euclidean_mult_mean": diag_sums["euclidean_mult_mean"] / num_batches,
             "beta_effective_mean": diag_sums["beta_effective_mean"] / num_batches,
+            "task_context_norm": diag_sums["task_context_norm"] / num_batches,
         }
         history_rows.append(row)
         append_jsonl(history_path, row)
@@ -589,12 +608,14 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         num_classes=num_classes,
         shrinkage=float(cfg.get("classifier", {}).get("prototype_shrinkage", 0.0)),
     )
+    task_context = model.encode_task_context(proto_h, proto_e)
     test_metrics = _evaluate(
         model,
         classifier,
         loaders.test,
         proto_h,
         proto_e,
+        task_context,
         cfg,
         device=device,
         num_classes=num_classes,
@@ -605,8 +626,8 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         feats, _, _ = next(iter(loaders.test))
         feats = feats.to(device, non_blocking=True)
         zh0, ze0, _ = model.encode(feats)
-        zh, ze, _ = model.transport(zh0, ze0, solver=str(cfg["ode"]["solver"]), nfe=int(cfg["eval"]["nfe"]))
-        return classifier(zh, ze, proto_h=proto_h, proto_e=proto_e, c=model.curvature(), geometry_mode=_geometry_mode(cfg))
+        zh, ze, _ = model.transport(zh0, ze0, solver=str(cfg["ode"]["solver"]), nfe=int(cfg["eval"]["nfe"]), task_context=task_context)
+        return classifier(zh, ze, proto_h=proto_h, proto_e=proto_e, c=model.curvature(), geometry_mode=_geometry_mode(cfg), task_context=task_context)
 
     throughput, peak_vram = measure_throughput(_fn, sample_count=int(cfg["eval"]["batch_size"]), device=device)
     flags = _failure_flags(cfg, history_rows, test_metrics)
@@ -630,6 +651,7 @@ def train(cfg: dict[str, Any]) -> dict[str, Any]:
         "hyper_mult_mean": float(final_row.get("hyper_mult_mean", 0.0)),
         "euclidean_mult_mean": float(final_row.get("euclidean_mult_mean", 0.0)),
         "beta_effective_mean": float(final_row.get("beta_effective_mean", 0.0)),
+        "task_context_norm": float(final_row.get("task_context_norm", 0.0)),
         "mean_zh_norm": float(final_row.get("mean_zh_norm", 0.0)),
         "mean_logmap0_zh_norm": float(final_row.get("mean_logmap0_zh_norm", 0.0)),
         **flags,

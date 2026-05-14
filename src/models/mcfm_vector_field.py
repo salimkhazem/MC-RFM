@@ -39,13 +39,15 @@ class VectorFieldNet(nn.Module):
         layers: int = 3,
         time_dim: int = 32,
         decoupled_heads: bool = True,
+        context_dim: int = 0,
     ):
         super().__init__()
         self.dh = int(dh)
         self.de = int(de)
         self.time_dim = int(time_dim)
         self.decoupled_heads = bool(decoupled_heads)
-        in_dim = self.dh + self.de + self.time_dim
+        self.context_dim = int(context_dim)
+        in_dim = self.dh + self.de + self.time_dim + self.context_dim
 
         blocks = []
         d = in_dim
@@ -65,9 +67,25 @@ class VectorFieldNet(nn.Module):
             self.head_e = None
             self.head_joint = nn.Linear(d, self.dh + self.de)
 
-    def forward(self, zh: torch.Tensor, ze: torch.Tensor, t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        zh: torch.Tensor,
+        ze: torch.Tensor,
+        t: torch.Tensor,
+        context: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         temb = sinusoidal_time_embedding(t, dim=self.time_dim)
-        x = torch.cat([zh, ze, temb], dim=-1)
+        if self.context_dim > 0:
+            if context is None:
+                context = torch.zeros((zh.shape[0], self.context_dim), device=zh.device, dtype=zh.dtype)
+            elif context.dim() == 1:
+                context = context.unsqueeze(0).expand(zh.shape[0], -1)
+            elif context.shape[0] == 1:
+                context = context.expand(zh.shape[0], -1)
+            context = context.to(device=zh.device, dtype=zh.dtype)
+            x = torch.cat([zh, ze, temb, context], dim=-1)
+        else:
+            x = torch.cat([zh, ze, temb], dim=-1)
         h = self.trunk(x)
         if self.decoupled_heads:
             vh = self.head_h(h) if self.head_h is not None else torch.zeros_like(zh)

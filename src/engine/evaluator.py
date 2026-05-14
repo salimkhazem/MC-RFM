@@ -36,6 +36,9 @@ def evaluate_checkpoint(cfg: dict, checkpoint_path: str | Path) -> dict:
         hyperbolic_scale_max=float(state_cfg["model"].get("hyperbolic_scale_max", 0.25)),
         euclidean_scale_init=float(state_cfg["model"].get("euclidean_scale_init", 1.0)),
         vector_field_h_input=str(state_cfg["model"].get("vector_field_h_input", "logmap0")),
+        task_conditioning=bool(state_cfg["model"].get("task_conditioning", False)),
+        task_context_dim=int(state_cfg["model"].get("task_context_dim", 128)),
+        task_context_hidden_dim=int(state_cfg["model"].get("task_context_hidden_dim", 128)),
     ).to(device)
     classifier = MCRFMClassifier(
         dh=int(state_cfg["model"]["dh"]),
@@ -49,6 +52,7 @@ def evaluate_checkpoint(cfg: dict, checkpoint_path: str | Path) -> dict:
         branch_gate_init=float(state_cfg.get("classifier", {}).get("branch_gate_init", 0.5)),
         adaptive_beta=bool(state_cfg.get("classifier", {}).get("adaptive_beta", False)),
         gate_hidden_dim=int(state_cfg.get("classifier", {}).get("gate_hidden_dim", 128)),
+        task_context_dim=int(state_cfg["model"].get("task_context_dim", 0)) if bool(state_cfg["model"].get("task_conditioning", False)) else 0,
     ).to(device)
     model.load_state_dict(ckpt["state_dict"])
     classifier.load_state_dict(ckpt["classifier_state_dict"], strict=False)
@@ -59,12 +63,14 @@ def evaluate_checkpoint(cfg: dict, checkpoint_path: str | Path) -> dict:
         num_classes=int(cfg["dataset"]["num_classes"]),
         shrinkage=float(state_cfg.get("classifier", {}).get("prototype_shrinkage", 0.0)),
     )
+    task_context = model.encode_task_context(proto_h, proto_e)
     metrics = _evaluate(
         model,
         classifier,
         loaders.test,
         proto_h,
         proto_e,
+        task_context,
         cfg,
         device=device,
         num_classes=int(cfg["dataset"]["num_classes"]),
@@ -80,6 +86,7 @@ def evaluate_checkpoint(cfg: dict, checkpoint_path: str | Path) -> dict:
             ze0,
             solver=str(cfg["ode"]["solver"]),
             nfe=int(cfg["eval"]["nfe"]),
+            task_context=task_context,
         )
         return classifier(
             zh,
@@ -88,6 +95,7 @@ def evaluate_checkpoint(cfg: dict, checkpoint_path: str | Path) -> dict:
             proto_e=proto_e,
             c=model.curvature(),
             geometry_mode=str(cfg["model"]["geometry_mode"]).lower(),
+            task_context=task_context,
         )
 
     throughput, peak_vram = measure_throughput(_fn, sample_count=int(cfg["eval"]["batch_size"]), device=device)

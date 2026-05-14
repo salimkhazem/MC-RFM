@@ -44,6 +44,9 @@ model:
   hyperbolic_scale_max: 0.35
   euclidean_scale_init: 1.0
   vector_field_h_input: logmap0
+  task_conditioning: true
+  task_context_dim: 128
+  task_context_hidden_dim: 128
 
 classifier:
   mode: hybrid
