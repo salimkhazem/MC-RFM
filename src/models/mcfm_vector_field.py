@@ -52,7 +52,7 @@ class VectorFieldNet(nn.Module):
         for _ in range(max(layers - 1, 1)):
             blocks.append(nn.Linear(d, hidden_dim))
             blocks.append(nn.LayerNorm(hidden_dim))
-            blocks.append(nn.GELU())
+            blocks.append(nn.SiLU())
             d = hidden_dim
         self.trunk = nn.Sequential(*blocks)
 
@@ -78,4 +78,3 @@ class VectorFieldNet(nn.Module):
         vh = out[..., : self.dh] if self.dh > 0 else torch.zeros_like(zh)
         ve = out[..., self.dh :] if self.de > 0 else torch.zeros_like(ze)
         return vh, ve
-
