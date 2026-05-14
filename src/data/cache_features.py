@@ -10,7 +10,8 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from src.data.dataset import build_dataset_bundle
+from src.data.dataset import build_dataset_bundle, extract_targets
+from src.data.fewshot_splits import sample_stratified_subset
 from src.data.lmdb_io import FeatureLMDBWriter, LMDBMeta
 from src.models.backbone import FrozenBackbone
 from src.utils.config import load_config
@@ -74,16 +75,23 @@ def run_cache(cfg: dict) -> None:
     out_root = ensure_dir(Path(cfg["cache"]["lmdb_dir"]) / cfg["dataset"]["name"] / cfg["model"]["backbone"])
     logger = setup_logger(out_root / "cache.log")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    bundle = build_dataset_bundle(cfg["dataset"])
+    bundle = build_dataset_bundle(cfg["dataset"], split_dir=cfg["fewshot"]["split_dir"])
     max_samples = int(cfg["cache"].get("max_samples", 0))
     if max_samples > 0:
-        def _sub(ds):
-            n = min(max_samples, len(ds))
-            return Subset(ds, list(range(n)))
+        split_offsets = {"train": 0, "val": 1, "test": 2}
 
-        bundle.train = _sub(bundle.train)
-        bundle.val = _sub(bundle.val)
-        bundle.test = _sub(bundle.test)
+        def _sub(ds, split_name: str):
+            labels = extract_targets(ds)
+            indices = sample_stratified_subset(
+                labels,
+                max_samples=max_samples,
+                seed=int(cfg["seed"]) + split_offsets[split_name],
+            )
+            return Subset(ds, indices)
+
+        bundle.train = _sub(bundle.train, "train")
+        bundle.val = _sub(bundle.val, "val")
+        bundle.test = _sub(bundle.test, "test")
     backbone = FrozenBackbone(cfg["model"]["backbone"], pretrained=bool(cfg["model"]["pretrained"])).to(device)
 
     for split_name, ds in [("train", bundle.train), ("val", bundle.val), ("test", bundle.test)]:
